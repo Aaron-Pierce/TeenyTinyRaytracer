@@ -3,7 +3,7 @@
 use crate::scene::Sphere;
 mod scene;
 use rand::Rng;
-use scene::{pt, AmbientLight, DirectionalLight, PointLight, Scene};
+use scene::{pt, AmbientLight, PointLight, Scene};
 
 fn main() {
 
