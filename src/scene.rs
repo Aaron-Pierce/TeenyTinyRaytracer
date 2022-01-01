@@ -21,14 +21,21 @@ impl Scene{
             for x in 0..1920{
                 let p = image.get_pixel_mut(x, y);
 
+                // Following CGfS, the camera is fixed at 0, 0, 0,
+                // and is facing parallel to the xz (horizontal) plane, i.e along (0, 0, 1)
+                // positive y is up, positive x is right, positive z is away.
+
+                // this origin is the top left of the viewport, which is therefore
+                // centered at (0, 0, 1), with a width of 1.980 units and a height of 1.080 units.
+                // I'm thinking of these units as meters.
                 let viewport_origin = pt(-1.980/2., 1.080/2., 1.);
 
+                // what world coordinate the 2D screen coordinate maps to
                 let point_on_viewport = viewport_origin.add(&pt(1.980 * (x as f32 / 1920.), -1.080 * (y as f32 / 1080.), 0.));
                 
                 let mut nearest_itsct: Point = pt(999., 999., 999.);
                 let mut itsct_normal = pt(0., 0., 0.);
                 let mut color: Color = [0., 0., 0., 0.];
-
                 let ray = Ray::new(pt(0., 0., 0.), point_on_viewport.sub(&pt(0., 0., 0.)));
                 self.objects.iter().for_each(|sphere| {
                     let hits = sphere.itsct(&ray);
@@ -43,22 +50,24 @@ impl Scene{
                 });
 
                 if nearest_itsct.x != 999.0 {
-                    // let mut c = color.map(|e| {e});
-                    let mut totalLight: f64 = 0.0;
-                    //compute lighting
+                    // compute lighting to determine what color to fill the pixel with.
+                    // the absense of light means you can't see something,
+                    // and having total light means you can see it in its full form,
+                    // so totalLight is roughly between 0 and 1, and the color gets
+                    // scaled by that value. Nothing stops it from going over 1 or under 0,
+                    // which can abnormally brighten or darken objects, which can be useful.
+                    // We add together all the light on the object to figure out how
+                    // bright we should draw the color
+                    let mut total_light: f64 = 0.0;
                     self.lights.iter().for_each(| light | {
-                        totalLight += light.intensity(itsct_normal,  nearest_itsct) as f64
+                        total_light += light.intensity(itsct_normal,  nearest_itsct) as f64
                     });
                     
-                    p.0 = color.map(|e| (e*totalLight*255.0) as u8);
+                    // convert from (0..1) to (0..255)
+                    p.0 = color.map(|e| (e*total_light*255.0) as u8);
                     p.0[3] = 255;
                 }else{
                     // background color/pattern
-                    if (x / 4) % 2 == 0 && (y / 4) % 2 == 0 {
-                        p.0 = [10, 10, 10, 255];
-                    }else{
-                        p.0 = [0, 0, 0, 255];
-                    }
                     p.0 = [0, 0, 0, 255]
                 }
 
@@ -82,7 +91,7 @@ pub struct AmbientLight{
     pub intensity: f32
 }
 impl Light for AmbientLight{
-    fn intensity(&self, normal: Point, pos: Point) -> f32 {
+    fn intensity(&self, _normal: Point, _pos: Point) -> f32 {
         return self.intensity;
     }
 }
@@ -93,12 +102,12 @@ pub struct PointLight{
 }
 impl Light for PointLight{
     fn intensity(&self, normal: Point, pos: Point) -> f32 {
-        let lightVec = self.position.sub(&pos);
-        let alignment = normal.dot(&lightVec);
+        let light_vec = self.position.sub(&pos);
+        let alignment = normal.dot(&light_vec);
         if alignment < 0. {
             return 0.;
         }
-        let intensity = self.intensity*(alignment / lightVec.length_squared().powf(0.5));
+        let intensity = self.intensity*(alignment / light_vec.length_squared().powf(0.5));
         return intensity;
     }
 }
@@ -110,13 +119,13 @@ pub struct DirectionalLight{
     pub position: Point
 }
 impl Light for DirectionalLight{
-    fn intensity(&self, normal: Point, pos: Point) -> f32 {
-        let lightVec = self.direction.scale(-1.);
-        let alignment = normal.dot(&lightVec);
+    fn intensity(&self, normal: Point, _pos: Point) -> f32 {
+        let light_vec = self.direction.scale(-1.);
+        let alignment = normal.dot(&light_vec);
         if alignment < 0. {
             return 0.;
         }
-        let intensity = self.intensity*(alignment / lightVec.length_squared().powf(0.5));
+        let intensity = self.intensity*(alignment / light_vec.length_squared().powf(0.5));
         return intensity;
     }
 }
@@ -180,6 +189,10 @@ pub fn pt(x: f32, y: f32, z: f32) -> Point{
 
 impl Sphere{
     fn itsct(&self, ray: &Ray) -> Vec<Point> {
+        // the a, b, and c, are the coefficients
+        // of the quadratic equation. Honestly,
+        // I just believed the derivation from
+        // https://gabrielgambetta.com/computer-graphics-from-scratch/02-basic-raytracing.html
         let a = ray.direction.length_squared();
         let co = &ray.origin.sub(&self.center);
         let b = 2.0 * co.dot(&ray.direction);
