@@ -4,7 +4,7 @@ A little renderer based on https://gabrielgambetta.com/computer-graphics-from-sc
 
 It just renders spheres and a few different types of light, without shadows.
 I always wanted to write some kind of 3D graphical thing, so I finally took
-an afternon and did it.
+an afternoon and did it.
 
 # Some outputted scenes
 
